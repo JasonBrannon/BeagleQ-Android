@@ -1,20 +1,18 @@
 package com.example.beagleq;
 
 import androidx.appcompat.app.AppCompatActivity;
-
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.SeekBar;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import org.json.JSONException;
 import org.json.JSONObject;
-
 import java.net.Socket;
-
-
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -26,15 +24,15 @@ public class MainActivity extends AppCompatActivity {
 
     private Thread Thread1 = null;
     private Button btnStart, btnConnect;
-    private TextView output, tvPitTemp, tvFanInfo;
+    private TextView output, tvPitTemp, tvFanInfo, lblSetPitTemp;
     private OkHttpClient client;
     private TextView tvConnStatus;
     private EditText etIP, etPort;
     private Switch switchFan;
+    SeekBar barPitTemp;
 
     //Web Socket
     private WebSocket ws;
-
 
     String SERVER_IP;
     int SERVER_PORT;
@@ -81,15 +79,16 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        btnStart = (Button) findViewById(R.id.btnSend);
         btnConnect = findViewById(R.id.btnConnect);
         tvConnStatus = findViewById(R.id.tvConnStatus);
         tvPitTemp = findViewById(R.id.tvPitTemp);
         tvFanInfo = findViewById(R.id.tvFanInfo);
+        lblSetPitTemp = findViewById(R.id.lblSetPitTemp);
         switchFan = findViewById(R.id.switchFan);
         output = (TextView) findViewById(R.id.tvConnStatus);
         etIP = findViewById(R.id.etIP);
         etPort = findViewById(R.id.etPort);
+        barPitTemp = findViewById(R.id.barPitTemp);
         client = new OkHttpClient();
 
         Button btnConnect = findViewById(R.id.btnConnect);
@@ -134,25 +133,55 @@ public class MainActivity extends AppCompatActivity {
 
             }
         });
-        btnStart.setOnClickListener(new View.OnClickListener() {
+
+        barPitTemp.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            int progressChangedValue = 0;
+
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                progressChangedValue = progress;
+            }
+
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                // TODO Auto-generated method stub
+            }
+
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+                String pitSet = String.format("%s F", progressChangedValue);
+
+
+                Toast.makeText(MainActivity.this, pitSet, Toast.LENGTH_SHORT).show();
+
+                JSONObject json = new JSONObject();
+
+                try {
+                    json.put("topic", "pitSL");
+                    json.put("data", progressChangedValue);
+
+                    ws.send(json.toString());
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Error Setting Pit Temp!", Toast.LENGTH_SHORT).show();
+                }
+
+
+            }
+        });
+
+        /*btnStart.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 connect();
             }
-        });
-
+        });*/
     }
 
-    private void connect() {
-        Request request = new Request.Builder().url("ws://10.69.8.179:8086").build();
-        EchoWebSocketListener listener = new EchoWebSocketListener();
-        WebSocket ws = client.newWebSocket(request, listener);
-        client.dispatcher().executorService().shutdown();
-    }
 
     private void updateTemps(JSONObject message) throws JSONException {
         String PIT = String.format("%s F", message.getString("pitTemp"));
         tvPitTemp.setText(PIT);
+
+        lblSetPitTemp.setText(String.format("Set Pit Temp: %s F", message.getString("pitSet")));
+        barPitTemp.setProgress(Integer.parseInt(message.getString("pitSet")));
     }
 
     private void updateFanStatus(JSONObject message) throws JSONException {
@@ -167,10 +196,8 @@ public class MainActivity extends AppCompatActivity {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                // Parse server message payload for data points
-                //output.setText(output.getText().toString() + "\n\n" + receivedPayload);
-
                 try {
+                    // server message payload for data topics
                     JSONObject message = new JSONObject(receivedPayload);
                     String topic = message.getString("topic");
                     switch (topic){
@@ -190,13 +217,11 @@ public class MainActivity extends AppCompatActivity {
                             //updatePitAlert(message);
                             break;
                         default:
-                            //document.getElementById('iInfo').innerHTML = "Unknown incoming message" + incoming.topic;
-
+                            //Logging Here
                     }
                 } catch (Exception ex){
                      tvConnStatus.setText("Fatal Blow! Server Down");
                 }
-
             }
         });
     }
@@ -223,155 +248,4 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
-
-    /*
-    class Thread2 implements Runnable {
-        @Override
-        public void run() {
-            while (true) {
-                try {
-                    final String message = input.readLine();
-                    if (message != null) {
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                tvMessages.append("server: " + message + " ");
-                            }
-                        });
-                    } else {
-                        Thread1 = new Thread(new Thread1());
-                        Thread1.start();
-                        return;
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-    }*/
-
-
-
-    /*
-
-    Thread Thread1 = null;
-    EditText etIP, etPort;
-    TextView tvMessages;
-    EditText etMessage;
-    Button btnSend;
-    String SERVER_IP;
-    int SERVER_PORT;
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        etIP = findViewById(R.id.etIP);
-        etPort = findViewById(R.id.etPort);
-        tvMessages = findViewById(R.id.tvMessages);
-        etMessage = findViewById(R.id.etMessage);
-        btnSend = findViewById(R.id.btnSend);
-        Button btnConnect = findViewById(R.id.btnConnect);
-        btnConnect.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-
-                try {
-                    tvMessages.setText("");
-                    SERVER_IP = etIP.getText().toString().trim();
-                    SERVER_PORT = Integer.parseInt(etPort.getText().toString().trim());
-
-                    if (SERVER_IP.length() == 0 || SERVER_PORT == 0) {
-                        tvMessages.setText("Must set the Server IP and Port");
-                    } else {
-                        Thread1 = new Thread(new Thread1());
-                        Thread1.start();
-                    }
-                } catch (Exception ex){
-                    tvMessages.setText("Must set the Server IP and Port");
-                }
-            }
-        });
-        btnSend.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                String message = "";
-                try {
-                    JSONObject json = new JSONObject();
-                    json.put("topic", "pidToggle");
-                    json.put("data", "1");
-                    message = json.toString();
-                } catch (Exception ex){
-                    tvMessages.setText(ex.toString());
-                }
-                if (!message.isEmpty()) {
-                    new Thread(new Thread3(message)).start();
-                }
-            }
-        });
-    }
-    private PrintWriter output;
-    private BufferedReader input;
-    class Thread1 implements Runnable {
-        public void run() {
-            Socket socket;
-            try {
-                socket = new Socket(SERVER_IP, SERVER_PORT);
-                output = new PrintWriter(socket.getOutputStream());
-                input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        tvMessages.setText("Connected");
-                    }
-                });
-                new Thread(new Thread2()).start();
-            } catch (IOException e) {
-                tvMessages.setText("Unable to connect. Verify IP and Port");
-                e.printStackTrace();
-            }
-        }
-    }
-    class Thread2 implements Runnable {
-        @Override
-        public void run() {
-            while (true) {
-                try {
-                    final String message = input.readLine();
-                    if (message != null) {
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                tvMessages.append("server: " + message + " ");
-                            }
-                        });
-                    } else {
-                        Thread1 = new Thread(new Thread1());
-                        Thread1.start();
-                        return;
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-    }
-    class Thread3 implements Runnable {
-        private String message;
-        Thread3(String message) {
-            this.message = message;
-        }
-        @Override
-        public void run() {
-            output.write(message);
-            output.flush();
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    //tvMessages.append("client: " + message + " ");
-                    tvMessages.append("client: " + message +  " ");
-                    etMessage.setText("");
-                }
-            });
-        }
-    } */
 }
